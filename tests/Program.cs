@@ -1,0 +1,22 @@
+using PaperTrader;
+using NiftyPremiumTrader.Api.Models;
+using System.Text.Json;
+static void Check(bool x,string message){if(!x)throw new Exception(message);}
+var eight=PaperEngine.Select(26104.8m);
+Check(eight.Take(4).Select(k=>k.Strike).SequenceEqual(new decimal[]{26100,26200,26300,26400}),"CE order");
+Check(eight.Skip(4).Select(k=>k.Strike).SequenceEqual(new decimal[]{26200,26100,26000,25900}),"PE order");
+Check(eight[6].Strike==26000&&eight[2].Strike==26300,"Chart opposite mapping");
+Check(PaperEngine.Select(26180).Take(4).Select(k=>k.Strike).SequenceEqual(new decimal[]{26100,26200,26300,26400}),"Upper rounding branch");
+var opts=new PaperOptions();var profiles=Profile.All(opts);Check(profiles.Count==12&&profiles.Select(x=>x.Id).Distinct().Count()==12,"Independent profiles");
+var locked=profiles.Single(x=>x.Id=="Locked-15-300-v1");Check(locked.Target==49000&&locked.Trigger==8500&&locked.NakedStop==70000&&locked.HedgedStop==10000,"Archived Locked thresholds");
+var mf=profiles.Single(x=>x.Id=="MFShield-15-Margin-v1");Check(mf.Target==100000&&mf.HedgedStop==50000&&mf.Margin&&!mf.Protection,"Archived MF profile");
+var day=new DateOnly(2026,1,8);var time=PaperEngine.Time(day,4);var state=new Portfolio{Profile=mf,Date=day,Expiry=new(2026,1,13),Eight=eight,LastCloseIndex=4,Pending=new(){Action="ENTRY",AtIndex=5,SignalIndex=4,Short=eight[6],Hedge=new(25700,"PE")}};
+var json=JsonSerializer.Serialize(state,Store.Json);var restored=JsonSerializer.Deserialize<Portfolio>(json,Store.Json)!;
+Check(restored.Pending!.AtIndex==5&&restored.LastCloseIndex==4&&restored.Profile==mf,"Restart pending/settings checkpoint");
+var trade=new Trade{Id="test",EntryAt=time,Legs=[new(){Contract=new(26000,"PE"),Entry=100,Mark=90},new(){Contract=new(25700,"PE"),Buy=true,Entry=10,Mark=8}]};state.Trades.Add(trade);PaperEngine.Mark(state,trade);
+Check(trade.Gross==7800&&trade.Costs==675&&trade.Net==7125,"Multi-leg P&L and fee calculation");
+restored=JsonSerializer.Deserialize<Portfolio>(JsonSerializer.Serialize(state,Store.Json),Store.Json)!;
+Check(restored.Trades.Count==1&&restored.Active?.Id=="test","Restart active position");
+var bars=eight.Select((k,i)=>new OptionCandle{SessionDate=day,ExpiryDate=state.Expiry,Strike=k.Strike,OptionType=k.Side,CandleTime=time,Open=100,Close=i<4?98:102,IsComplete=true}).ToList();
+Check(PaperEngine.Direction(state,bars,time)==-1,"Bearish same-column pairs");
+Console.WriteLine("PASS: strike branches, chart pairs, 12 profiles, frozen defaults, restart JSON, multi-leg accounting, signal direction.");

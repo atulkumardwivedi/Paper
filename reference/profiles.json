@@ -1,0 +1,56 @@
+{
+  "source_archive": "Locked_vs_MF_Shield_15_Lots_Yearwise.zip",
+  "source_configs": {
+    "original_locked_15_lots": {
+      "lots": 15,
+      "permanent": false,
+      "delayed300": true,
+      "distance": 300,
+      "target": 49000,
+      "trigger": 8500,
+      "naked": 70000,
+      "hedged": 10000,
+      "cooldown": 2,
+      "name": "Reference upfront 10% hedge",
+      "family": "baseline500",
+      "warning": null,
+      "warning_confirm": 1,
+      "premium_fraction": 0.1,
+      "filters": [],
+      "exit_label": "squeeze",
+      "control_label": "none",
+      "selected_id": 42
+    },
+    "mf_shield_15_lots": {
+      "lots": 15,
+      "permanent": true,
+      "delayed300": false,
+      "distance": 500,
+      "target": 100000,
+      "trigger": 5000.0,
+      "naked": 25000.0,
+      "hedged": 50000,
+      "cooldown": 2,
+      "name": "Reference upfront 10% hedge",
+      "family": "baseline500",
+      "warning": "chart:squeeze_opposite",
+      "warning_confirm": 1,
+      "premium_fraction": 0.1,
+      "filters": [],
+      "exit_label": "squeeze",
+      "control_label": "none",
+      "selected_id": 42
+    }
+  },
+  "changes": [
+    "first5minute CLOSE",
+    "CEascending PEdescending samecolumn pairs",
+    "no Opstra override",
+    "7lot values scale7/15",
+    "12hedge/lot/strategy variants"
+  ],
+  "historical_zero_slippage_net": {
+    "Locked": 3828397.5,
+    "MFShield": 5067588.75
+  }
+}

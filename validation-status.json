@@ -1,0 +1,11 @@
+{
+  "config_json_parsing": "passed",
+  "project_xml_parsing": "passed",
+  "paper_only_no_order_service": "passed",
+  "no_Opstra_lookup": "passed",
+  "dotnet_build": "not run: SDK unavailable",
+  "angular_build": "not run: dependencies unavailable",
+  "db_integration": "not run: no user DB access",
+  "CSharp_rule_checks": "supplied, not run here",
+  "files": 32
+}

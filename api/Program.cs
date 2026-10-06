@@ -1,0 +1,24 @@
+using Microsoft.Extensions.Options;
+using Npgsql;
+using PaperTrader;
+using NiftyPremiumTrader.Api.Services;
+using NiftyPremiumTrader.Api.Options;
+using NiftyPremiumTrader.Api.Data;
+var builder=WebApplication.CreateBuilder(args);
+var options=builder.Configuration.GetSection("Paper").Get<PaperOptions>()??new();
+if(options.LotSize<=0||options.DailyApiLimit<=options.ReservedApiCalls||options.QuoteRefreshSeconds<5||options.SlippagePerFill<0)throw new InvalidOperationException("Invalid Paper settings");
+builder.Services.AddSingleton(options);builder.Services.AddSingleton(NpgsqlDataSource.Create(builder.Configuration.GetConnectionString("TradingDb")??throw new InvalidOperationException("TradingDb required")));
+builder.Services.Configure<BreezeOptions>(builder.Configuration.GetSection("Breeze"));builder.Services.AddHttpClient("Breeze",h=>h.Timeout=TimeSpan.FromSeconds(20));
+builder.Services.AddSingleton<Store>();builder.Services.AddSingleton<CandleRepository>();builder.Services.AddSingleton<ApiBudgetService>();builder.Services.AddSingleton<BreezeRestClient>();builder.Services.AddSingleton<BreezeMarketDataClient>();builder.Services.AddSingleton<MarketData>();builder.Services.AddSingleton<PaperEngine>();builder.Services.AddSingleton<PaperWorker>();builder.Services.AddHostedService(sp=>sp.GetRequiredService<PaperWorker>());
+builder.Services.AddCors(o=>o.AddDefaultPolicy(p=>p.WithOrigins("http://localhost:4202","http://127.0.0.1:4202","http://localhost:4200","http://127.0.0.1:4200").AllowAnyHeader().AllowAnyMethod()));
+var app=builder.Build();app.UseCors();await app.Services.GetRequiredService<Store>().Initialize(CancellationToken.None);
+app.MapGet("/api/status",async(Store s,PaperWorker w,MarketData m,CancellationToken ct)=>new{mode="PAPER ONLY",w.Status,w.LastCycle,market=m.Status,paused=await s.Paused(ct),apiEnabled=options.AllowApiDownloads,options.QuoteRefreshSeconds});
+app.MapGet("/api/profiles",()=>Profile.All(options));
+app.MapGet("/api/dates",async(Store s,CancellationToken ct)=>await s.Dates(ct));
+app.MapGet("/api/portfolios",async(string? date,Store s,CancellationToken ct)=>await s.States(date==null?MarketClock.IndiaDateNow():DateOnly.ParseExact(date,"yyyy-MM-dd"),ct));
+app.MapGet("/api/chart",async(string date,string expiry,decimal strike,string side,Store s,CancellationToken ct)=>(await s.Candles(DateOnly.ParseExact(date,"yyyy-MM-dd"),ct)).Where(c=>c.ExpiryDate==DateOnly.ParseExact(expiry,"yyyy-MM-dd")&&c.Strike==strike&&c.OptionType==side));
+app.MapPost("/api/pause",async(bool paused,Store s,CancellationToken ct)=>{await s.Pause(paused,ct);return Results.Ok(new{paused});});
+app.MapGet("/api/export",async(string date,Store s,CancellationToken ct)=>{
+ var states=await s.States(DateOnly.ParseExact(date,"yyyy-MM-dd"),ct);var b=new System.Text.StringBuilder("Profile,Date,TradeId,EntryUTC,ExitUTC,Reason,Gross,Costs,Net,Recovered\n");
+ foreach(var p in states)foreach(var t in p.Trades)b.AppendLine(FormattableString.Invariant($"{p.Profile.Id},{p.Date:yyyy-MM-dd},{t.Id},{t.EntryAt:O},{t.ExitAt:O},{t.Reason},{t.Gross},{t.Costs},{t.Net},{t.Recovered}"));return Results.File(System.Text.Encoding.UTF8.GetBytes(b.ToString()),"text/csv",$"paper-{date}.csv");});
+app.Run();
